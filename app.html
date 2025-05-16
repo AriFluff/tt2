@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Logistics HUD</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: rgba(20, 20, 30, 0.85);
+      --text: #fff;
+      --accent: #007bff;
+    }
+    body {
+      margin: 0;
+      background: transparent;
+      font-family: 'Segoe UI', sans-serif;
+      user-select: none;
+    }
+    #hud {
+      position: absolute;
+      top: 50px;
+      left: 50px;
+      width: 300px;
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.6);
+      overflow: hidden;
+      cursor: move;
+      z-index: 9999;
+    }
+    #header {
+      padding: 10px;
+      background: var(--accent);
+      font-weight: bold;
+      text-align: center;
+    }
+    #content {
+      padding: 10px;
+    }
+    .label {
+      font-weight: bold;
+    }
+    .value {
+      margin-bottom: 5px;
+    }
+    button {
+      margin: 4px 0;
+      background: var(--accent);
+      border: none;
+      color: white;
+      padding: 6px;
+      width: 100%;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="header">🚛 Logistics HUD</div>
+    <div id="content">
+      <div><span class="label">Location:</span> <span id="location">-</span></div>
+      <div><span class="label">Vehicle:</span> <span id="vehicle">-</span></div>
+      <div><span class="label">Fuel:</span> <span id="fuel">-</span></div>
+      <div><span class="label">RPM:</span> <span id="rpm">-</span></div>
+      <div><span class="label">Engine:</span> <span id="engine">-</span></div>
+      <hr>
+      <button onclick="setWaypoint()">📍 Set Waypoint Here</button>
+      <button onclick="notify()">🔔 Self Notification</button>
+      <button onclick="playSound()">🔊 Play Sound FX</button>
+      <button onclick="sharePosition()">📡 Share Position</button>
+    </div>
+  </div>
+
+  <script>
+    // Dragging
+    const hud = document.getElementById('hud');
+    let isDragging = false, offsetX = 0, offsetY = 0;
+    hud.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      offsetX = e.clientX - hud.offsetLeft;
+      offsetY = e.clientY - hud.offsetTop;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        hud.style.left = `${e.clientX - offsetX}px`;
+        hud.style.top = `${e.clientY - offsetY}px`;
+      }
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    // Command functions
+    function setWaypoint() {
+      if (window.sourcePos) {
+        send({ type: "setWaypoint", x: sourcePos.x, y: sourcePos.y });
+      } else {
+        alert("No position data yet.");
+      }
+    }
+
+    function notify() {
+      send({ type: "notification", text: "Stay on route!" });
+    }
+
+    function playSound() {
+      send({ type: "sfx", sfx: 5 }); // MEDAL_UP
+    }
+
+    function sharePosition() {
+      if (window.sourcePos) {
+        send({ type: "shareServerData", key: "driver_position", value: `${sourcePos.x.toFixed(1)},${sourcePos.y.toFixed(1)}` });
+        send({ type: "notification", text: "Position shared to all drivers." });
+      }
+    }
+
+    // Handle game data
+    let sourcePos = null;
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (!data) return;
+
+      if (data.pos_x !== undefined) {
+        sourcePos = { x: data.pos_x, y: data.pos_y, z: data.pos_z };
+      }
+
+      if (data.street || data.zoneName) {
+        document.getElementById("location").innerText = `${data.street || "-"}, ${data.zoneName || "-"}`;
+      }
+      if (data.vehicleName) {
+        document.getElementById("vehicle").innerText = data.vehicleName;
+      }
+      if (data.fuel !== undefined) {
+        document.getElementById("fuel").innerText = `${data.fuel.toFixed(1)}%`;
+      }
+      if (data.rpm !== undefined) {
+        document.getElementById("rpm").innerText = data.rpm.toFixed(0);
+      }
+      if (data.engine) {
+        document.getElementById("engine").innerText = data.engine;
+      }
+    });
+
+    // Helper to send commands
+    function send(data) {
+      window.parent.postMessage(data, '*');
+    }
+
+    // Request full data when loaded
+    window.onload = () => {
+      send({ type: "getData" });
+    }
+  </script>
+</body>
+</html>
